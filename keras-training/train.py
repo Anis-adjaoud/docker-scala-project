@@ -1,4 +1,5 @@
 import os, gc
+from time import time
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = "true"
 
@@ -190,3 +191,4 @@ save_path = os.path.join(MODEL_PATH, "intel_model_cnn.h5")
 model.save(save_path)
 print(f"Modele sauvegarde: {save_path}", flush=True)
 print("Entrainement termine!", flush=True)
+time.sleep(60)

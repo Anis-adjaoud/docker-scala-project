@@ -52,8 +52,8 @@ services:
       dockerfile: Dockerfile
     container_name: keras-training
     volumes:
-      - data_processed_volume:/data/processed   # lit les parquets Spark
-      - models_volume:/data/models              # écrit les .h5
+      - data_processed_volume:/data/processed
+      - models_volume:/data/models
     networks:
       - preprocessing_net
     environment:
@@ -68,7 +68,6 @@ services:
         condition: service_healthy
     restart: "no"
     healthcheck:
-      # Même chemin que MODEL_PATH
       test: ["CMD-SHELL", "test -f /data/models/intel_model_cnn.h5"]
       interval: 30s
       timeout: 10s
@@ -94,7 +93,7 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - models_volume:/data/models              # lit les .h5 de keras
+      - models_volume:/data/models
     networks:
       - app_net
       - data_net
@@ -198,9 +197,9 @@ volumes:
     driver_opts:
       type: none
       o: bind
-      device: ./data/models
+      device: ./models
 
-  postgres_volume:        # volume géré par Docker — isolé du reste
+  postgres_volume:
     driver: local
 
 networks:

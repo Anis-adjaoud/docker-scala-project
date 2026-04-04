@@ -79,6 +79,8 @@ object Pretraitement {
     }
 
     logger.info("Prétraitement terminé avec succès.")
+    logger.info("Attente de 60s avant extinction...")
+    Thread.sleep(60000)
     spark.stop()
   }
 
