@@ -97,6 +97,7 @@ services:
       - models_volume:/data/models              # lit les .h5 de keras
     networks:
       - app_net
+      - data_net
     environment:
       - MODEL_PATH=/data/models
       - DB_URL=postgresql://mluser:mlpassword@postgres-db:5432/mldb
@@ -125,8 +126,6 @@ services:
     container_name: streamlit-app
     ports:
       - "8501:8501"
-    volumes:
-      - models_volume:/data/models              # fallback prédiction locale
     networks:
       - app_net
     environment:
@@ -155,7 +154,7 @@ services:
       - postgres_volume:/var/lib/postgresql/data  # persistance des données
       - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
-      - app_net
+      - data_net
     environment:
       - POSTGRES_DB=mldb
       - POSTGRES_USER=mluser
@@ -211,3 +210,6 @@ networks:
   app_net:
     driver: bridge
     name: app_net
+  data_net:
+    driver: bridge
+    name: data_net
