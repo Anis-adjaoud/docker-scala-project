@@ -36,3 +36,5 @@ data/processed/test
 data/processed/train
 # data/raw/test
 # data/raw/train
+
+*.bkp
