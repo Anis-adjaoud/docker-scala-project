@@ -34,5 +34,5 @@ models/*.h5
 # Fichiers de données
 data/processed/test
 data/processed/train
-data/raw/test
-data/raw/train
+# data/raw/test
+# data/raw/train
