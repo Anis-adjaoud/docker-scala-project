@@ -7,10 +7,7 @@ images brutes (train/ test/)
         ↓
 spark-preprocessing  →  Parquet (features 150×150×3 + label)
         ↓
-keras-training       →  intel_model_mlp.h5
-                     →  intel_model_cnn.h5       ← défaut
-                     →  intel_model_bigcnn.h5
-                     →  model_meta.json
+keras-training       →  intel_model_cnn.h5       ← défaut
         ↓                        ↓
 streamlit-app               api-rest  ←→  postgres-db
 (http://localhost:8501)  (http://localhost:8000)
@@ -23,7 +20,7 @@ streamlit-app               api-rest  ←→  postgres-db
 ## Structure attendue des données
 
 ```
-ml-pipeline/
+docker-scala-project/
 └── data/
     └── raw/
         ├── train/
@@ -43,12 +40,12 @@ ml-pipeline/
 ## Démarrage
 
 ```bash
-# 1. Place tes données
-cp -r /ton/dataset/train  ml-pipeline/data/raw/train
-cp -r /ton/dataset/test   ml-pipeline/data/raw/test
+# 1. Placer les données
+cp -r /le/dataset/train  docker-scala-project/data/raw/train
+cp -r /le/dataset/test   docker-scala-project/data/raw/test
 
-# 2. Lance tout
-cd ml-pipeline
+# 2. Lancer tout
+cd docker-scala-project
 docker-compose up --build
 
 # Accès
@@ -93,5 +90,4 @@ docker-compose down
 | Réseau | Services |
 |---|---|
 | `preprocessing_net` | spark-preprocessing ↔ keras-training |
-| `training_net` | keras-training ↔ api-rest |
 | `app_net` | api-rest ↔ streamlit-app ↔ postgres-db |
