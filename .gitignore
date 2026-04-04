@@ -1,0 +1,38 @@
+# Scala / sbt
+target/
+project/target/
+project/project/
+.cache/
+lib_managed/
+src_managed/
+out/
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+
+# Docker / environnement
+.env
+docker-compose.override.yml
+
+# Fichiers temporaires
+*.log
+logs/
+*.class
+*.jar
+*.war
+*.swp
+.DS_Store
+
+# Fichiers de modèles
+models/*.png
+models/*.h5
+
+# Fichiers de données
+data/processed/test
+data/processed/train
+data/raw/test
+data/raw/train

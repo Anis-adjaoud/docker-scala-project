@@ -1,0 +1,213 @@
+version: "3.9"
+
+# =============================================================
+#  ML PIPELINE — Intel Image Classification
+#  Spark (Scala) → Keras/TF (CNN) → FastAPI + Streamlit
+# =============================================================
+
+services:
+
+  # -----------------------------------------------------------
+  # 1. SPARK PREPROCESSING
+  # -----------------------------------------------------------
+  spark-preprocessing:
+    build:
+      context: ./spark-preprocessing
+      dockerfile: Dockerfile
+    container_name: spark-preprocessing
+    volumes:
+      - data_raw_volume:/data/raw
+      - data_processed_volume:/data/processed
+    networks:
+      - preprocessing_net
+    environment:
+      - PATH_TRAIN_IN=/data/raw/train
+      - PATH_TEST_IN=/data/raw/test
+      - PATH_TRAIN_OUT=/data/processed/train
+      - PATH_TEST_OUT=/data/processed/test
+      - JAVA_OPTS=-Xms1g -Xmx4g
+      - SPARK_DRIVER_MEMORY=4g
+    restart: "no"
+    deploy:
+      resources:
+        limits:
+          cpus: "4.0"
+          memory: 6G
+        reservations:
+          cpus: "2.0"
+          memory: 3G
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /data/processed/train/_SUCCESS && test -f /data/processed/test/_SUCCESS"]
+      interval: 15s
+      timeout: 10s
+      retries: 120
+      start_period: 30s
+
+  # -----------------------------------------------------------
+  # 2. KERAS TRAINING
+  # -----------------------------------------------------------
+  keras-training:
+    build:
+      context: ./keras-training
+      dockerfile: Dockerfile
+    container_name: keras-training
+    volumes:
+      - data_processed_volume:/data/processed   # lit les parquets Spark
+      - models_volume:/data/models              # écrit les .h5
+    networks:
+      - preprocessing_net
+    environment:
+      - PATH_TRAIN_OUT=/data/processed/train
+      - PATH_TEST_OUT=/data/processed/test
+      - MODEL_PATH=/data/models
+      - EPOCHS=10
+      - BATCH_SIZE=8
+      - TF_MEMORY_LIMIT_MB=4096
+    depends_on:
+      spark-preprocessing:
+        condition: service_healthy
+    restart: "no"
+    healthcheck:
+      # Même chemin que MODEL_PATH
+      test: ["CMD-SHELL", "test -f /data/models/intel_model_cnn.h5"]
+      interval: 30s
+      timeout: 10s
+      retries: 60
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: "4.0"
+          memory: 8G
+        reservations:
+          cpus: "2.0"
+          memory: 4G
+
+  # -----------------------------------------------------------
+  # 3. API REST
+  # -----------------------------------------------------------
+  api-rest:
+    build:
+      context: ./api-rest
+      dockerfile: Dockerfile
+    container_name: api-rest
+    ports:
+      - "8000:8000"
+    volumes:
+      - models_volume:/data/models              # lit les .h5 de keras
+    networks:
+      - app_net
+    environment:
+      - MODEL_PATH=/data/models
+      - DB_URL=postgresql://mluser:mlpassword@postgres-db:5432/mldb
+    depends_on:
+      keras-training:
+        condition: service_healthy
+      postgres-db:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+
+  # -----------------------------------------------------------
+  # 4. STREAMLIT APP
+  # -----------------------------------------------------------
+  streamlit-app:
+    build:
+      context: ./streamlit-app
+      dockerfile: Dockerfile
+    container_name: streamlit-app
+    ports:
+      - "8501:8501"
+    volumes:
+      - models_volume:/data/models              # fallback prédiction locale
+    networks:
+      - app_net
+    environment:
+      - MODEL_PATH=/data/models
+      - API_URL=http://api-rest:8000
+    depends_on:
+      api-rest:
+        condition: service_started
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+
+  # -----------------------------------------------------------
+  # 5. POSTGRESQL
+  # -----------------------------------------------------------
+  postgres-db:
+    image: postgres:15-alpine
+    container_name: postgres-db
+    volumes:
+      - postgres_volume:/var/lib/postgresql/data  # persistance des données
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - app_net
+    environment:
+      - POSTGRES_DB=mldb
+      - POSTGRES_USER=mluser
+      - POSTGRES_PASSWORD=mlpassword
+      - POSTGRES_HOST_AUTH_METHOD=md5
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mluser -d mldb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+# =============================================================
+volumes:
+  data_raw_volume:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/raw
+
+  data_processed_volume:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/processed
+
+  models_volume:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/models
+
+  postgres_volume:        # volume géré par Docker — isolé du reste
+    driver: local
+
+networks:
+  preprocessing_net:
+    driver: bridge
+    name: preprocessing_net
+  app_net:
+    driver: bridge
+    name: app_net
