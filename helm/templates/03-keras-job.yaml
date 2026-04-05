@@ -1,0 +1,62 @@
+{{- if eq .Values.pipeline.mode "full" }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-keras
+  namespace: {{ .Values.namespace }}
+spec:
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 1
+  template:
+    spec:
+      restartPolicy: OnFailure
+      initContainers:
+        - name: wait-for-spark
+          image: {{ .Values.images.alpine.repository }}:{{ .Values.images.alpine.tag }}
+          command:
+            - sh
+            - -c
+            - |
+              echo "Attente de Spark (_SUCCESS)..."
+              until test -f {{ .Values.spark.paths.trainOut }}/_SUCCESS && \
+                    test -f {{ .Values.spark.paths.testOut }}/_SUCCESS; do
+                sleep 15
+              done
+              echo "Spark termine."
+          volumeMounts:
+            - name: data-processed
+              mountPath: /data/processed
+      containers:
+        - name: keras-training
+          image: {{ .Values.images.keras.repository }}:{{ .Values.images.keras.tag }}
+          imagePullPolicy: Never
+          env:
+            - name: PATH_TRAIN_OUT
+              value: {{ .Values.spark.paths.trainOut }}
+            - name: PATH_TEST_OUT
+              value: {{ .Values.spark.paths.testOut }}
+            - name: MODEL_PATH
+              value: {{ .Values.keras.modelPath }}
+            - name: EPOCHS
+              value: {{ .Values.keras.epochs | quote }}
+            - name: BATCH_SIZE
+              value: {{ .Values.keras.batchSize | quote }}
+            - name: TF_MEMORY_LIMIT_MB
+              value: {{ .Values.keras.tfMemoryLimitMb | quote }}
+            - name: TF_CPP_MIN_LOG_LEVEL
+              value: "3"
+          resources:
+            {{- toYaml .Values.keras.resources | nindent 12 }}
+          volumeMounts:
+            - name: data-processed
+              mountPath: /data/processed
+            - name: models
+              mountPath: /data/models
+      volumes:
+        - name: data-processed
+          persistentVolumeClaim:
+            claimName: {{ .Release.Name }}-data-processed-pvc
+        - name: models
+          persistentVolumeClaim:
+            claimName: {{ .Release.Name }}-models-pvc
+{{- end }}

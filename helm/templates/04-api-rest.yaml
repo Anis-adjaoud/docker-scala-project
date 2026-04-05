@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-api
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-api
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-api
+    spec:
+      initContainers:
+        - name: wait-for-model
+          image: {{ .Values.images.alpine.repository }}:{{ .Values.images.alpine.tag }}
+          command:
+            - sh
+            - -c
+            - |
+              {{- if eq .Values.pipeline.mode "full" }}
+              echo "Mode full : attente de la fin de Keras..."
+              {{- else }}
+              echo "Mode serve : verification que le modele existe..."
+              {{- end }}
+              until test -f {{ .Values.keras.modelPath }}/intel_model_cnn.h5; do
+                echo "  Modele absent, nouvelle tentative dans 15s..."
+                sleep 15
+              done
+              echo "Modele pret."
+          volumeMounts:
+            - name: models
+              mountPath: /data/models
+        - name: wait-for-postgres
+          image: {{ .Values.images.alpine.repository }}:{{ .Values.images.alpine.tag }}
+          command:
+            - sh
+            - -c
+            - |
+              apk add --no-cache postgresql-client -q
+              echo "Attente de Postgres..."
+              until pg_isready -h {{ .Release.Name }}-postgres -U {{ .Values.postgres.user }}; do
+                sleep 5
+              done
+              echo "Postgres pret."
+      containers:
+        - name: api-rest
+          image: {{ .Values.images.api.repository }}:{{ .Values.images.api.tag }}
+          imagePullPolicy: Never
+          env:
+            - name: MODEL_PATH
+              value: {{ .Values.api.modelPath }}
+            - name: DB_URL
+              value: postgresql://{{ .Values.postgres.user }}:{{ .Values.postgres.password }}@{{ .Release.Name }}-postgres:{{ .Values.postgres.port }}/{{ .Values.postgres.db }}
+          ports:
+            - containerPort: {{ .Values.api.port }}
+          resources:
+            {{- toYaml .Values.api.resources | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.api.port }}
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.api.port }}
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          volumeMounts:
+            - name: models
+              mountPath: /data/models
+      volumes:
+        - name: models
+          persistentVolumeClaim:
+            claimName: {{ .Release.Name }}-models-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-api
+  namespace: {{ .Values.namespace }}
+spec:
+  selector:
+    app: {{ .Release.Name }}-api
+  type: NodePort
+  ports:
+    - port: {{ .Values.api.port }}
+      targetPort: {{ .Values.api.port }}
+      nodePort: {{ .Values.api.nodePort }}

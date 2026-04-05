@@ -1,0 +1,91 @@
+# =============================================================
+# PersistentVolumes (hostPath) + PersistentVolumeClaims
+# Le chemin hôte est contrôlé par .Values.hostBasePath
+# =============================================================
+
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ .Release.Name }}-data-raw-pv
+spec:
+  capacity:
+    storage: {{ .Values.storage.raw.size }}
+  accessModes: [ReadWriteMany]
+  persistentVolumeReclaimPolicy: Retain
+  hostPath:
+    path: {{ .Values.hostBasePath }}/data/raw
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Release.Name }}-data-raw-pvc
+  namespace: {{ .Values.namespace }}
+spec:
+  accessModes: [ReadWriteMany]
+  resources:
+    requests:
+      storage: {{ .Values.storage.raw.size }}
+  volumeName: {{ .Release.Name }}-data-raw-pv
+  storageClassName: ""
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ .Release.Name }}-data-processed-pv
+spec:
+  capacity:
+    storage: {{ .Values.storage.processed.size }}
+  accessModes: [ReadWriteMany]
+  persistentVolumeReclaimPolicy: Retain
+  hostPath:
+    path: {{ .Values.hostBasePath }}/data/processed
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Release.Name }}-data-processed-pvc
+  namespace: {{ .Values.namespace }}
+spec:
+  accessModes: [ReadWriteMany]
+  resources:
+    requests:
+      storage: {{ .Values.storage.processed.size }}
+  volumeName: {{ .Release.Name }}-data-processed-pv
+  storageClassName: ""
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ .Release.Name }}-models-pv
+spec:
+  capacity:
+    storage: {{ .Values.storage.models.size }}
+  accessModes: [ReadWriteMany]
+  persistentVolumeReclaimPolicy: Retain
+  hostPath:
+    path: {{ .Values.hostBasePath }}/models
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Release.Name }}-models-pvc
+  namespace: {{ .Values.namespace }}
+spec:
+  accessModes: [ReadWriteMany]
+  resources:
+    requests:
+      storage: {{ .Values.storage.models.size }}
+  volumeName: {{ .Release.Name }}-models-pv
+  storageClassName: ""
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Release.Name }}-postgres-pvc
+  namespace: {{ .Values.namespace }}
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: {{ .Values.storage.storageClass }}
+  resources:
+    requests:
+      storage: {{ .Values.storage.postgres.size }}

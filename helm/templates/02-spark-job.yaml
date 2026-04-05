@@ -1,0 +1,44 @@
+{{- if eq .Values.pipeline.mode "full" }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-spark
+  namespace: {{ .Values.namespace }}
+spec:
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 1
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: spark-preprocessing
+          image: {{ .Values.images.spark.repository }}:{{ .Values.images.spark.tag }}
+          imagePullPolicy: Never
+          env:
+            - name: PATH_TRAIN_IN
+              value: {{ .Values.spark.paths.trainIn }}
+            - name: PATH_TEST_IN
+              value: {{ .Values.spark.paths.testIn }}
+            - name: PATH_TRAIN_OUT
+              value: {{ .Values.spark.paths.trainOut }}
+            - name: PATH_TEST_OUT
+              value: {{ .Values.spark.paths.testOut }}
+            - name: JAVA_OPTS
+              value: {{ .Values.spark.javaOpts | quote }}
+            - name: SPARK_DRIVER_MEMORY
+              value: {{ .Values.spark.driverMemory | quote }}
+          resources:
+            {{- toYaml .Values.spark.resources | nindent 12 }}
+          volumeMounts:
+            - name: data-raw
+              mountPath: /data/raw
+            - name: data-processed
+              mountPath: /data/processed
+      volumes:
+        - name: data-raw
+          persistentVolumeClaim:
+            claimName: {{ .Release.Name }}-data-raw-pvc
+        - name: data-processed
+          persistentVolumeClaim:
+            claimName: {{ .Release.Name }}-data-processed-pvc
+{{- end }}

@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-streamlit
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-streamlit
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-streamlit
+    spec:
+      initContainers:
+        - name: wait-for-api
+          image: {{ .Values.images.alpine.repository }}:{{ .Values.images.alpine.tag }}
+          command:
+            - sh
+            - -c
+            - |
+              apk add --no-cache curl -q
+              echo "Attente de l'API..."
+              until curl -sf http://{{ .Release.Name }}-api:{{ .Values.api.port }}/health; do
+                sleep 10
+              done
+              echo "API prete."
+      containers:
+        - name: streamlit
+          image: {{ .Values.images.streamlit.repository }}:{{ .Values.images.streamlit.tag }}
+          imagePullPolicy: Never
+          env:
+            - name: API_URL
+              value: http://{{ .Release.Name }}-api:{{ .Values.api.port }}
+          ports:
+            - containerPort: {{ .Values.streamlit.port }}
+          resources:
+            {{- toYaml .Values.streamlit.resources | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /
+              port: {{ .Values.streamlit.port }}
+            initialDelaySeconds: 15
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-streamlit
+  namespace: {{ .Values.namespace }}
+spec:
+  selector:
+    app: {{ .Release.Name }}-streamlit
+  type: NodePort
+  ports:
+    - port: {{ .Values.streamlit.port }}
+      targetPort: {{ .Values.streamlit.port }}
+      nodePort: {{ .Values.streamlit.nodePort }}

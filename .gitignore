@@ -38,3 +38,4 @@ data/processed/train
 # data/raw/train
 
 *.bkp
+*.dtmp

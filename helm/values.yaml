@@ -1,0 +1,137 @@
+# =============================================================
+# values.yaml — Toute la configuration du pipeline ici.
+# Surcharge avec : helm install docker-scala-project ./docker-scala-project -f my-values.yaml
+# ou directement : helm install docker-scala-project ./docker-scala-project --set keras.epochs=20
+# =============================================================
+
+namespace: docker-scala-project
+
+# -------------------------------------------------------------
+# Mode pipeline
+# "full"  : lance Spark + Keras puis démarre API + Streamlit
+# "serve" : skip les jobs, vérifie juste _SUCCESS + .h5
+#           et démarre directement API + Streamlit
+# -------------------------------------------------------------
+pipeline:
+  mode: full
+
+# -------------------------------------------------------------
+# Chemin racine du projet sur la machine hôte Windows.
+# Format Docker Desktop : /run/desktop/mnt/host/c/...
+# -------------------------------------------------------------
+hostBasePath: /run/desktop/mnt/host/c/projects/docker-scala-project
+
+# -------------------------------------------------------------
+# Images (toutes locales — imagePullPolicy: Never)
+# -------------------------------------------------------------
+images:
+  spark:
+    repository: docker-scala-project-spark-preprocessing
+    tag: latest
+  keras:
+    repository: docker-scala-project-keras-training
+    tag: latest
+  api:
+    repository: docker-scala-project-api-rest
+    tag: latest
+  streamlit:
+    repository: docker-scala-project-streamlit-app
+    tag: latest
+  alpine:
+    repository: alpine
+    tag: "3.19"
+
+# -------------------------------------------------------------
+# Volumes (PVC)
+# -------------------------------------------------------------
+storage:
+  storageClass: hostpath
+  raw:
+    size: 10Gi
+  processed:
+    size: 10Gi
+  models:
+    size: 2Gi
+  postgres:
+    size: 2Gi
+
+# -------------------------------------------------------------
+# Spark preprocessing
+# -------------------------------------------------------------
+spark:
+  paths:
+    trainIn:  /data/raw/train
+    testIn:   /data/raw/test
+    trainOut: /data/processed/train
+    testOut:  /data/processed/test
+  javaOpts: "-Xms1g -Xmx4g"
+  driverMemory: "4g"
+  resources:
+    limits:
+      cpu: "4"
+      memory: 6Gi
+    requests:
+      cpu: "2"
+      memory: 3Gi
+
+# -------------------------------------------------------------
+# Keras training
+# -------------------------------------------------------------
+keras:
+  modelPath: /data/models
+  epochs: 10
+  batchSize: 8
+  tfMemoryLimitMb: 4096
+  resources:
+    limits:
+      cpu: "4"
+      memory: 8Gi
+    requests:
+      cpu: "2"
+      memory: 4Gi
+
+# -------------------------------------------------------------
+# API REST
+# -------------------------------------------------------------
+api:
+  modelPath: /data/models
+  port: 8000
+  nodePort: 30800
+  resources:
+    limits:
+      cpu: "2"
+      memory: 1Gi
+    requests:
+      cpu: "500m"
+      memory: 512Mi
+
+# -------------------------------------------------------------
+# Streamlit
+# -------------------------------------------------------------
+streamlit:
+  port: 8501
+  nodePort: 30501
+  resources:
+    limits:
+      cpu: "1"
+      memory: 512Mi
+    requests:
+      cpu: "250m"
+      memory: 256Mi
+
+# -------------------------------------------------------------
+# PostgreSQL
+# -------------------------------------------------------------
+postgres:
+  image: postgres:15-alpine
+  db: mldb
+  user: mluser
+  password: mlpassword
+  port: 5432
+  resources:
+    limits:
+      cpu: "1"
+      memory: 512Mi
+    requests:
+      cpu: "250m"
+      memory: 256Mi

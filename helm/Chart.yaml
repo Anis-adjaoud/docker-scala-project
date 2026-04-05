@@ -1,0 +1,6 @@
+apiVersion: v2
+name: docker-scala-project
+description: Intel Image Classification — Spark + Keras + FastAPI + Streamlit
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
