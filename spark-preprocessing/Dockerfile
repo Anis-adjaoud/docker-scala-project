@@ -35,7 +35,6 @@ WORKDIR /app
 COPY --from=builder /build/target/scala-*/preprocessing-assembly-*.jar app.jar
 COPY config.properties .
 
-# ImageIO/AWT headless (pas de display dans un container Linux)
 ENV JAVA_TOOL_OPTIONS="-Djava.awt.headless=true"
 
 ENV PATH_TRAIN_IN=/data/raw/train

@@ -1,6 +1,5 @@
 # =============================================================
 # PersistentVolumes (hostPath) + PersistentVolumeClaims
-# Le chemin hôte est contrôlé par .Values.hostBasePath
 # =============================================================
 
 apiVersion: v1

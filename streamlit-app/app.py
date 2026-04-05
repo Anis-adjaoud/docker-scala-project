@@ -1,7 +1,6 @@
 """
 streamlit-app/app.py
 Interface de classification d'images Intel.
-Délègue 100 % des prédictions à api-rest — aucun modèle chargé en local.
 """
 
 import os

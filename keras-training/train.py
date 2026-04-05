@@ -38,7 +38,7 @@ def find_parquet(folder):
 PARQUET_FILE = find_parquet(TRAIN_PATH)
 
 # ==========================================
-# 2. SPLIT SUR LES LABELS UNIQUEMENT
+# 2. SPLIT
 # ==========================================
 print("Lecture des labels...", flush=True)
 pf     = pq.ParquetFile(PARQUET_FILE)
@@ -48,27 +48,18 @@ n      = len(labels)
 train_idx, test_idx = train_test_split(
     np.arange(n), test_size=0.2, random_state=42, stratify=labels
 )
+
 num_classes = len(np.unique(labels))
 print(f"Train: {len(train_idx)} | Test: {len(test_idx)} | Classes: {num_classes}", flush=True)
 
 # ==========================================
-# 3. GENERATEUR tf.data via generator Python
-#    - Lit le parquet row-group par row-group sequentiellement (pas d'acces aleatoire)
-#    - Le shuffle est fait par tf.data (buffer en RAM, pas de relecture disque)
-#    - Aucun DataFrame global en memoire
+# 3. DATASET
 # ==========================================
 ROW_GROUP_SIZE = pf.metadata.row_group(0).num_rows
 print(f"Row-groups: {pf.metadata.num_row_groups} x ~{ROW_GROUP_SIZE} lignes", flush=True)
 
 def make_tf_dataset(indices, shuffle=False):
-    """
-    Construit un tf.data.Dataset a partir d'un sous-ensemble d'index.
-    Strategie : on trie les index pour lire le parquet sequentiellement,
-    puis on laisse tf.data shuffler le buffer resultant.
-    """
-    # Index tries = lecture sequentielle du parquet (pas de seek aleatoire)
-    sorted_pos = np.argsort(indices)
-    sorted_idx = indices[sorted_pos]
+    sorted_idx = np.sort(indices)
 
     def row_generator():
         meta       = pf.metadata
@@ -82,7 +73,6 @@ def make_tf_dataset(indices, shuffle=False):
             rg_start = boundaries[rg]
             rg_end   = boundaries[rg + 1]
 
-            # Trouve les index qui tombent dans ce row-group
             lo = idx_ptr
             while idx_ptr < total and sorted_idx[idx_ptr] < rg_end:
                 idx_ptr += 1
@@ -91,7 +81,6 @@ def make_tf_dataset(indices, shuffle=False):
             if len(rg_indices) == 0:
                 continue
 
-            # Lit le row-group entier une seule fois
             table = pf.read_row_groups([rg], columns=["features", "label"])
             df    = table.to_pandas()
             del table
@@ -99,8 +88,10 @@ def make_tf_dataset(indices, shuffle=False):
             for gidx in rg_indices:
                 local = int(gidx - rg_start)
                 row   = df.iloc[local]
+
                 feat  = np.asarray(row["features"], dtype=np.float32).reshape(IMG_SIZE, IMG_SIZE, 3)
                 label = np.int32(row["label"])
+
                 yield feat, label
 
             del df
@@ -117,8 +108,7 @@ def make_tf_dataset(indices, shuffle=False):
     if shuffle:
         ds = ds.shuffle(buffer_size=512, reshuffle_each_iteration=True)
 
-    ds = ds.batch(BATCH_SIZE).prefetch(2)
-    return ds
+    return ds.batch(BATCH_SIZE).prefetch(2)
 
 print("Construction des datasets...", flush=True)
 train_ds = make_tf_dataset(train_idx, shuffle=True)
@@ -129,26 +119,59 @@ test_ds  = make_tf_dataset(test_idx,  shuffle=False)
 # ==========================================
 def plot_metrics(history, name):
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+
     ax1.plot(history.history['accuracy'],     label='Train')
     ax1.plot(history.history['val_accuracy'], label='Validation')
-    ax1.set_title(f'{name} - Precision'); ax1.legend()
+    ax1.set_title(f'{name} - Precision')
+    ax1.legend()
+
     ax2.plot(history.history['loss'],     label='Train')
     ax2.plot(history.history['val_loss'], label='Validation')
-    ax2.set_title(f'{name} - Perte'); ax2.legend()
+    ax2.set_title(f'{name} - Perte')
+    ax2.legend()
+
     out = os.path.join(MODEL_PATH, f"{name}_metrics.png")
-    plt.savefig(out, dpi=80, bbox_inches='tight'); plt.close(fig)
+    plt.savefig(out, dpi=80, bbox_inches='tight')
+    plt.close(fig)
+
     print(f"Courbes: {out}", flush=True)
 
+
 def plot_confusion(model, name):
+    print("Calcul matrice de confusion...", flush=True)
+
+    # Prédictions
     y_pred = np.argmax(model.predict(test_ds, verbose=0), axis=1)
-    cm = confusion_matrix(labels[test_idx], y_pred)
+    y_true = []
+    for _, y in test_ds:
+        y_true.extend(y.numpy())
+    y_true = np.array(y_true)
+
+    cm = confusion_matrix(
+        y_true,
+        y_pred,
+        labels=np.arange(num_classes)
+    )
+
     fig, ax = plt.subplots(figsize=(10, 8))
-    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
-                xticklabels=CLASS_NAMES, yticklabels=CLASS_NAMES, ax=ax)
+    sns.heatmap(
+        cm,
+        annot=True,
+        fmt='d',
+        cmap='Blues',
+        xticklabels=CLASS_NAMES,
+        yticklabels=CLASS_NAMES,
+        ax=ax
+    )
+
     ax.set_title(f'Confusion : {name}')
-    ax.set_ylabel('Vrai'); ax.set_xlabel('Predit')
+    ax.set_ylabel('Vrai')
+    ax.set_xlabel('Predit')
+
     out = os.path.join(MODEL_PATH, f"{name}_confusion.png")
-    plt.savefig(out, dpi=80, bbox_inches='tight'); plt.close(fig)
+    plt.savefig(out, dpi=80, bbox_inches='tight')
+    plt.close(fig)
+
     print(f"Confusion: {out}", flush=True)
 
 # ==========================================
@@ -167,20 +190,29 @@ def build_cnn():
     ])
 
 # ==========================================
-# 6. ENTRAINEMENT
+# 6. TRAIN
 # ==========================================
 print("\n" + "="*40 + "\nDEBUT : CNN\n" + "="*40, flush=True)
 
 model = build_cnn()
-model.compile(optimizer='adam',
-              loss='sparse_categorical_crossentropy',
-              metrics=['accuracy'])
+
+model.compile(
+    optimizer='adam',
+    loss='sparse_categorical_crossentropy',
+    metrics=['accuracy']
+)
 
 history = model.fit(
     train_ds,
     epochs=EPOCHS,
     validation_data=test_ds,
-    callbacks=[callbacks.EarlyStopping(patience=3, restore_best_weights=True, verbose=1)],
+    callbacks=[
+        callbacks.EarlyStopping(
+            patience=3,
+            restore_best_weights=True,
+            verbose=1
+        )
+    ],
     verbose=1,
 )
 
@@ -189,6 +221,8 @@ plot_confusion(model, "CNN")
 
 save_path = os.path.join(MODEL_PATH, "intel_model_cnn.h5")
 model.save(save_path)
+
 print(f"Modele sauvegarde: {save_path}", flush=True)
 print("Entrainement termine!", flush=True)
+
 time.sleep(60)

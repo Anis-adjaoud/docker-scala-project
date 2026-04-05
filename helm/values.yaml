@@ -1,7 +1,5 @@
 # =============================================================
-# values.yaml — Toute la configuration du pipeline ici.
-# Surcharge avec : helm install docker-scala-project ./docker-scala-project -f my-values.yaml
-# ou directement : helm install docker-scala-project ./docker-scala-project --set keras.epochs=20
+# values.yaml — Toute la configuration du pipeline
 # =============================================================
 
 namespace: docker-scala-project
