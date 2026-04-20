@@ -1,5 +1,5 @@
 import os, gc
-from time import time
+import time
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = "true"
 

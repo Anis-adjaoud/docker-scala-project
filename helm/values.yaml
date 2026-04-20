@@ -11,7 +11,7 @@ namespace: docker-scala-project
 #           et démarre directement API + Streamlit
 # -------------------------------------------------------------
 pipeline:
-  mode: full
+  mode: serve
 
 # -------------------------------------------------------------
 # Chemin racine du projet sur la machine hôte Windows.
